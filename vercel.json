@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://REEMPLAZAR-CON-URL-DE-RAILWAY/:path*"
+      "destination": "https://boxplan-backend-production.up.railway.app/:path*"
     },
     {
       "source": "/(.*)",
