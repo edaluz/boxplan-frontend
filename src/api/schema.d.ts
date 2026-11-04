@@ -212,6 +212,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/groups/{id}/workouts/copy-week": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["WorkoutsController_copyWeek"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workouts/{id}/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["WorkoutsController_copy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workouts/{id}": {
         parameters: {
             query?: never;
@@ -287,6 +319,38 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TemplatesController_list"];
+        put?: never;
+        post: operations["TemplatesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["TemplatesController_remove"];
         options?: never;
         head?: never;
         patch?: never;
@@ -458,6 +522,33 @@ export interface components {
             /** @description El orden del array define Block.order */
             blocks: components["schemas"]["BlockInputDto"][];
         };
+        CopyWeekDto: {
+            /**
+             * @description Primer día de la semana origen
+             * @example 2026-11-02
+             */
+            fromWeekStart: string;
+            /**
+             * @description Primer día de la semana destino
+             * @example 2026-11-09
+             */
+            toWeekStart: string;
+        };
+        CopyWeekResultDto: {
+            /** @description Fechas creadas */
+            created: string[];
+            /** @description Fechas salteadas (ya tenían planificación) */
+            skipped: string[];
+        };
+        CopyWorkoutDto: {
+            /**
+             * @description Fecha destino (YYYY-MM-DD)
+             * @example 2026-11-09
+             */
+            date: string;
+            /** @description Grupo destino (tenés que ser coach). Por defecto, el mismo grupo. */
+            groupId?: string;
+        };
         UpdateWorkoutDto: {
             /**
              * @description YYYY-MM-DD
@@ -545,6 +636,18 @@ export interface components {
         UploadAvatarDto: {
             /** @example data:image/jpeg;base64,/9j/4AAQ... */
             image: string;
+        };
+        TemplateDto: {
+            id: string;
+            name: string;
+            blocks: components["schemas"]["BlockInputDto"][];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreateTemplateDto: {
+            /** @example Calentamiento A */
+            name: string;
+            blocks: components["schemas"]["BlockInputDto"][];
         };
     };
     responses: never;
@@ -987,6 +1090,91 @@ export interface operations {
             };
         };
     };
+    WorkoutsController_copyWeek: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyWeekDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopyWeekResultDto"];
+                };
+            };
+            /** @description Sin membresía o rol insuficiente */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recurso inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WorkoutsController_copy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyWorkoutDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkoutDto"];
+                };
+            };
+            /** @description Sin membresía o rol insuficiente */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recurso inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya hay un workout ese día */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     WorkoutsController_findOne: {
         parameters: {
             query?: never;
@@ -1278,6 +1466,67 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    TemplatesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateDto"][];
+                };
+            };
+        };
+    };
+    TemplatesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateDto"];
+                };
+            };
+        };
+    };
+    TemplatesController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };

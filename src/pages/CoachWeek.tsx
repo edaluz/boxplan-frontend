@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Workout } from '../api/client'
 import BlockView from '../components/BlockView'
+import { CopyWeekDialog, DuplicateDayDialog } from '../components/CopyDialogs'
 import ErrorText from '../components/ErrorText'
 import Ranking from '../components/Ranking'
 import WorkoutEditor from '../components/WorkoutEditor'
@@ -13,6 +14,8 @@ export default function CoachWeek({ groupId }: { groupId: string }) {
   const q = useWorkouts(groupId, weekStart, weekEnd)
   const [editing, setEditing] = useState<{ date: string; workout?: Workout } | null>(null)
   const [openRanking, setOpenRanking] = useState<string | null>(null)
+  const [duplicating, setDuplicating] = useState<Workout | null>(null)
+  const [copyingWeek, setCopyingWeek] = useState(false)
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   // La API devuelve array: puede haber más de uno por día en el futuro (RFC §9)
@@ -21,13 +24,14 @@ export default function CoachWeek({ groupId }: { groupId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button className="btn-ghost" onClick={() => setWeekStart(addDays(weekStart, -7))}>←</button>
         <button className="btn-ghost" onClick={() => setWeekStart(startOfWeek(today()))}>Esta semana</button>
         <button className="btn-ghost" onClick={() => setWeekStart(addDays(weekStart, 7))}>→</button>
         <span className="ml-2 text-sm text-zinc-400">
           {formatDay(weekStart, { day: 'numeric', month: 'short' })} – {formatDay(weekEnd, { day: 'numeric', month: 'short' })}
         </span>
+        <button className="btn-ghost ml-auto" disabled={!q.data?.length} onClick={() => setCopyingWeek(true)}>⧉ Copiar semana</button>
       </div>
       <ErrorText error={q.error} />
 
@@ -47,7 +51,10 @@ export default function CoachWeek({ groupId }: { groupId: string }) {
                 <div key={w.id} className="space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="font-semibold text-lime-300">{w.title || <span className="font-normal text-zinc-500">Planificación</span>}</p>
-                    <button className="btn-ghost px-2 py-1 text-xs" onClick={() => setEditing({ date: d, workout: w })}>Editar</button>
+                    <div className="flex gap-1">
+                      <button className="btn-ghost px-2 py-1 text-xs" onClick={() => setDuplicating(w)}>Duplicar</button>
+                      <button className="btn-ghost px-2 py-1 text-xs" onClick={() => setEditing({ date: d, workout: w })}>Editar</button>
+                    </div>
                   </div>
                   {w.blocks.map((b) => (
                     <BlockView key={b.id} block={b}>
@@ -67,6 +74,10 @@ export default function CoachWeek({ groupId }: { groupId: string }) {
         })}
       </div>
 
+      {duplicating && <DuplicateDayDialog workout={duplicating} onClose={() => setDuplicating(null)} />}
+      {copyingWeek && (
+        <CopyWeekDialog groupId={groupId} weekStart={weekStart} onClose={() => setCopyingWeek(false)} onGoToWeek={setWeekStart} />
+      )}
       {editing && (
         <WorkoutEditor groupId={groupId} date={editing.date} workout={editing.workout} onClose={() => setEditing(null)} />
       )}

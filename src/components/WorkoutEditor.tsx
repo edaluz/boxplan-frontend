@@ -1,8 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useFieldArray, useForm, useWatch, type Control, type UseFormRegister } from 'react-hook-form'
+import TemplatePicker, { templatesKey } from './TemplatePicker'
 import { z } from 'zod'
 import { api, unwrap, type Workout } from '../api/client'
+import type { components } from '../api/schema'
 import { formatDay } from '../lib/dates'
 import { youtubeId } from '../lib/youtube'
 import { SCORE_LABEL } from '../lib/scores'
@@ -49,6 +52,47 @@ const emptyBlock = (n: number): Form['blocks'][number] => ({
 })
 const emptySet = () => ({ sets: '1', reps: '', percent: '' })
 
+type FormBlock = Form['blocks'][number]
+type BlockInput = components['schemas']['BlockInputDto']
+/** Bloque guardado (o de plantilla) → campos del formulario. */
+type BlockLike = {
+  id?: string; type: FormBlock['type']; title?: string | null; content?: string | null; movement?: string | null
+  videoUrl?: string | null; durationSec?: number | null; intervalSec?: number | null
+  sets?: { sets: number; reps: string; percent?: number | null }[] | null; scoreType?: FormBlock['scoreType'] | null
+}
+
+function toFormBlock(b: BlockLike): FormBlock {
+  return {
+    id: b.id, type: b.type, title: b.title ?? '', content: b.content ?? '', movement: b.movement ?? '', videoUrl: b.videoUrl ?? '',
+    durationMin: b.durationSec ? String(Math.round(b.durationSec / 60)) : '',
+    intervalSec: b.intervalSec ? String(b.intervalSec) : '',
+    sets: (b.sets ?? []).map((s) => ({ sets: String(s.sets), reps: s.reps, percent: s.percent?.toString() ?? '' })),
+    scoreType: b.scoreType ?? '',
+  }
+}
+
+/** Campos del formulario → body de la API. */
+function toBlockInput(b: FormBlock): BlockInput {
+  return {
+    ...(b.id ? { id: b.id } : {}),
+    type: b.type,
+    title: b.title || undefined,
+    content: b.content,
+    movement: b.type === 'STRENGTH' ? b.movement || undefined : undefined,
+    sets: b.type === 'STRENGTH'
+      ? b.sets.filter((s) => s.reps.trim()).map((s) => ({
+          sets: Number(s.sets) || 1,
+          reps: s.reps.trim(),
+          percent: s.percent ? Number(s.percent.replace(',', '.')) : undefined,
+        }))
+      : undefined,
+    videoUrl: b.videoUrl.trim() || undefined,
+    durationSec: isTimed(b.type) && b.durationMin ? Number(b.durationMin) * 60 : undefined,
+    intervalSec: b.type === 'EMOM' && b.intervalSec ? Number(b.intervalSec) : undefined,
+    scoreType: b.type === 'VIDEO' ? undefined : b.scoreType || undefined,
+  }
+}
+
 const MOVEMENTS = [
   'Snatch', 'Power snatch', 'Hang snatch', 'Snatch pull', 'Overhead squat',
   'Clean', 'Power clean', 'Hang clean', 'Clean & Jerk', 'Jerk', 'Push jerk', 'Split jerk', 'Clean pull',
@@ -62,48 +106,53 @@ export default function WorkoutEditor({ groupId, date, workout, onClose }: {
   onClose: () => void
 }) {
   const qc = useQueryClient()
-  const { register, control, handleSubmit, formState } = useForm<Form>({
+  const { register, control, handleSubmit, formState, getValues } = useForm<Form>({
     resolver: zodResolver(schema),
     defaultValues: workout
       ? {
           date: workout.date,
           title: workout.title ?? '',
-          blocks: workout.blocks.map((b) => ({
-            id: b.id, type: b.type, title: b.title ?? '', content: b.content, movement: b.movement ?? '', videoUrl: b.videoUrl ?? '',
-            durationMin: b.durationSec ? String(Math.round(b.durationSec / 60)) : '',
-            intervalSec: b.intervalSec ? String(b.intervalSec) : '',
-            sets: (b.sets ?? []).map((s) => ({ sets: String(s.sets), reps: s.reps, percent: s.percent?.toString() ?? '' })),
-            scoreType: b.scoreType ?? '',
-          })),
+          blocks: workout.blocks.map(toFormBlock),
         }
       : { date, title: '', blocks: [emptyBlock(1)] },
   })
   const blocks = useFieldArray({ control, name: 'blocks' })
   const watched = useWatch({ control, name: 'blocks' })
+  const [showTemplates, setShowTemplates] = useState(false)
+  const [tplMsg, setTplMsg] = useState<string | null>(null)
+
+  const saveTemplate = useMutation({
+    mutationFn: (v: { name: string; blocks: FormBlock[] }) =>
+      unwrap(api.POST('/me/templates', {
+        body: { name: v.name, blocks: v.blocks.map((b) => ({ ...toBlockInput(b), id: undefined })) },
+      })),
+    onSuccess: (t) => {
+      qc.invalidateQueries({ queryKey: templatesKey })
+      setTplMsg(`Plantilla "${t.name}" guardada`)
+    },
+  })
+  const askAndSave = (defaultName: string, list: FormBlock[]) => {
+    const name = window.prompt('Nombre de la plantilla', defaultName)?.trim()
+    if (name) { setTplMsg(null); saveTemplate.mutate({ name, blocks: list }) }
+  }
+  const applyTemplate = (list: BlockInput[]) => {
+    // Si el único bloque es el vacío por defecto, la plantilla lo reemplaza
+    const current = getValues('blocks')
+    const onlyEmpty = current.length === 1 && !current[0].id && !current[0].content.trim()
+      && !current[0].sets.length && !current[0].videoUrl.trim()
+    const start = onlyEmpty ? 0 : current.length
+    const next = list.map((b, j) => ({ ...toFormBlock(b), id: undefined, title: b.title || `Bloque ${start + j + 1}` }))
+    if (onlyEmpty) blocks.replace(next)
+    else blocks.append(next)
+    setShowTemplates(false)
+  }
 
   const save = useMutation({
     mutationFn: (f: Form) => {
       const body = {
         date: f.date,
         title: f.title.trim() || undefined,
-        blocks: f.blocks.map((b) => ({
-          ...(b.id ? { id: b.id } : {}),
-          type: b.type,
-          title: b.title || undefined,
-          content: b.content,
-          movement: b.type === 'STRENGTH' ? b.movement || undefined : undefined,
-          sets: b.type === 'STRENGTH'
-            ? b.sets.filter((s) => s.reps.trim()).map((s) => ({
-                sets: Number(s.sets) || 1,
-                reps: s.reps.trim(),
-                percent: s.percent ? Number(s.percent.replace(',', '.')) : undefined,
-              }))
-            : undefined,
-          videoUrl: b.videoUrl.trim() || undefined,
-          durationSec: isTimed(b.type) && b.durationMin ? Number(b.durationMin) * 60 : undefined,
-          intervalSec: b.type === 'EMOM' && b.intervalSec ? Number(b.intervalSec) : undefined,
-          scoreType: b.type === 'VIDEO' ? undefined : b.scoreType || undefined,
-        })),
+        blocks: f.blocks.map(toBlockInput),
       }
       return workout
         ? unwrap(api.PUT('/workouts/{id}', { params: { path: { id: workout.id } }, body }))
@@ -206,7 +255,11 @@ export default function WorkoutEditor({ groupId, date, workout, onClose }: {
               <div className="flex gap-2 text-xs">
                 <button type="button" className="btn-ghost px-2 py-1" disabled={i === 0} onClick={() => blocks.move(i, i - 1)}>↑</button>
                 <button type="button" className="btn-ghost px-2 py-1" disabled={i === blocks.fields.length - 1} onClick={() => blocks.move(i, i + 1)}>↓</button>
-                <button type="button" className="btn-danger ml-auto px-2 py-1" onClick={() => blocks.remove(i)}>Quitar</button>
+                <button type="button" className="btn-ghost ml-auto px-2 py-1" title="Guardar este bloque como plantilla"
+                  onClick={() => askAndSave(getValues(`blocks.${i}.title`) || `Bloque ${i + 1}`, [getValues(`blocks.${i}`)])}>
+                  ☆ Plantilla
+                </button>
+                <button type="button" className="btn-danger px-2 py-1" onClick={() => blocks.remove(i)}>Quitar</button>
               </div>
             </div>
             )
@@ -214,7 +267,17 @@ export default function WorkoutEditor({ groupId, date, workout, onClose }: {
           <div className="grid grid-cols-2 gap-2">
             <button type="button" className="btn-ghost" onClick={() => blocks.append(emptyBlock(blocks.fields.length + 1))}>+ Agregar bloque</button>
             <button type="button" className="btn-ghost" onClick={() => blocks.append({ ...emptyBlock(blocks.fields.length + 1), type: 'VIDEO' })}>▶ Agregar video</button>
+            <button type="button" className={showTemplates ? 'btn-primary' : 'btn-ghost'} onClick={() => setShowTemplates(!showTemplates)}>
+              + Desde plantilla
+            </button>
+            <button type="button" className="btn-ghost" disabled={!blocks.fields.length || saveTemplate.isPending}
+              onClick={() => askAndSave(getValues('title') || 'Día', getValues('blocks'))}>
+              ☆ Guardar día como plantilla
+            </button>
           </div>
+          {showTemplates && <TemplatePicker onUse={applyTemplate} />}
+          {tplMsg && <p className="text-sm text-lime-300">{tplMsg}</p>}
+          <ErrorText error={saveTemplate.error} />
         </div>
 
         <ErrorText error={save.error ?? remove.error} />
