@@ -4,22 +4,25 @@ import { useFieldArray, useForm, useWatch, type Control, type UseFormRegister } 
 import { z } from 'zod'
 import { api, unwrap, type Workout } from '../api/client'
 import { formatDay } from '../lib/dates'
+import { youtubeId } from '../lib/youtube'
 import { SCORE_LABEL } from '../lib/scores'
 import { workoutsKey } from '../lib/useWorkouts'
 import ErrorText from './ErrorText'
+import YouTubeEmbed from './YouTubeEmbed'
 
 const BLOCK_TYPES = ['FREE', 'STRENGTH', 'AMRAP', 'EMOM', 'FOR_TIME'] as const
 const SCORE_TYPES = ['TIME', 'REPS', 'ROUNDS_REPS', 'LOAD', 'TEXT'] as const
 
 const schema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  title: z.string().trim().min(1, 'Poné un título'),
+  title: z.string(),
   blocks: z.array(z.object({
     id: z.string().optional(),
     type: z.enum(BLOCK_TYPES),
     title: z.string().optional(),
     content: z.string(),
     movement: z.string(),
+    videoUrl: z.string().refine((v) => !v.trim() || !!youtubeId(v), 'Pegá un link de YouTube'),
     sets: z.array(z.object({ sets: z.string(), reps: z.string(), percent: z.string() })),
     scoreType: z.enum(SCORE_TYPES).or(z.literal('')),
   }).refine((b) => b.content.trim() || b.sets.some((s) => s.reps.trim()), {
@@ -28,7 +31,7 @@ const schema = z.object({
 })
 type Form = z.infer<typeof schema>
 
-const emptyBlock = (): Form['blocks'][number] => ({ type: 'FREE', title: '', content: '', movement: '', sets: [], scoreType: '' })
+const emptyBlock = (): Form['blocks'][number] => ({ type: 'FREE', title: '', content: '', movement: '', videoUrl: '', sets: [], scoreType: '' })
 const emptySet = () => ({ sets: '1', reps: '', percent: '' })
 
 const MOVEMENTS = [
@@ -49,9 +52,9 @@ export default function WorkoutEditor({ groupId, date, workout, onClose }: {
     defaultValues: workout
       ? {
           date: workout.date,
-          title: workout.title,
+          title: workout.title ?? '',
           blocks: workout.blocks.map((b) => ({
-            id: b.id, type: b.type, title: b.title ?? '', content: b.content, movement: b.movement ?? '',
+            id: b.id, type: b.type, title: b.title ?? '', content: b.content, movement: b.movement ?? '', videoUrl: b.videoUrl ?? '',
             sets: (b.sets ?? []).map((s) => ({ sets: String(s.sets), reps: s.reps, percent: s.percent?.toString() ?? '' })),
             scoreType: b.scoreType ?? '',
           })),
@@ -64,7 +67,7 @@ export default function WorkoutEditor({ groupId, date, workout, onClose }: {
     mutationFn: (f: Form) => {
       const body = {
         date: f.date,
-        title: f.title,
+        title: f.title.trim() || undefined,
         blocks: f.blocks.map((b) => ({
           ...(b.id ? { id: b.id } : {}),
           type: b.type,
@@ -78,6 +81,7 @@ export default function WorkoutEditor({ groupId, date, workout, onClose }: {
                 percent: s.percent ? Number(s.percent.replace(',', '.')) : undefined,
               }))
             : undefined,
+          videoUrl: b.videoUrl.trim() || undefined,
           scoreType: b.scoreType || undefined,
         })),
       }
@@ -104,8 +108,8 @@ export default function WorkoutEditor({ groupId, date, workout, onClose }: {
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="sm:col-span-2">
-            <label>Título</label>
-            <input {...register('title')} placeholder="Lunes pesado" />
+            <label>Título (opcional)</label>
+            <input {...register('title')} placeholder="Murph, Semana de test…" />
             <ErrorText error={formState.errors.title?.message} />
           </div>
           <div><label>Fecha</label><input type="date" {...register('date')} /></div>
@@ -136,6 +140,12 @@ export default function WorkoutEditor({ groupId, date, workout, onClose }: {
               <StrengthFields control={control} register={register} index={i} />
               <textarea rows={3} {...register(`blocks.${i}.content`)} placeholder={'21-15-9\nThrusters 43/30kg\nPull-ups'} />
               <ErrorText error={formState.errors.blocks?.[i]?.content?.message} />
+              <div>
+                <label>Video de YouTube (opcional)</label>
+                <input inputMode="url" placeholder="https://youtu.be/…" {...register(`blocks.${i}.videoUrl`)} />
+                <ErrorText error={formState.errors.blocks?.[i]?.videoUrl?.message} />
+                <VideoPreview control={control} index={i} />
+              </div>
               <div className="flex gap-2 text-xs">
                 <button type="button" className="btn-ghost px-2 py-1" disabled={i === 0} onClick={() => blocks.move(i, i - 1)}>↑</button>
                 <button type="button" className="btn-ghost px-2 py-1" disabled={i === blocks.fields.length - 1} onClick={() => blocks.move(i, i + 1)}>↓</button>
@@ -203,4 +213,10 @@ function StrengthFields({ control, register, index }: {
       <button type="button" className="btn-ghost w-full px-2 py-1 text-xs" onClick={addRow}>+ Serie</button>
     </div>
   )
+}
+
+/** Vista previa del video mientras se edita el bloque. */
+function VideoPreview({ control, index }: { control: Control<Form>; index: number }) {
+  const url = useWatch({ control, name: `blocks.${index}.videoUrl` })
+  return url && youtubeId(url) ? <YouTubeEmbed url={url} compact /> : null
 }

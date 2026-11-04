@@ -148,6 +148,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/groups/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GroupsController_members"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/groups/{id}/members/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["GroupsController_removeMember"];
+        options?: never;
+        head?: never;
+        patch: operations["GroupsController_updateMember"];
+        trace?: never;
+    };
     "/invites/{code}/join": {
         parameters: {
             query?: never;
@@ -306,11 +338,30 @@ export interface components {
             /** @example Box Palermo · 7am */
             name: string;
         };
+        CreateInviteDto: {
+            /**
+             * @description Rol con el que entra quien use la invitación
+             * @default ATHLETE
+             */
+            role: components["schemas"]["MembershipRole"];
+        };
         InviteDto: {
             code: string;
+            role: components["schemas"]["MembershipRole"];
             groupId: string;
             /** Format: date-time */
             expiresAt: string;
+        };
+        MemberDto: {
+            userId: string;
+            name: string;
+            avatarUrl: string | null;
+            role: components["schemas"]["MembershipRole"];
+            /** @description Creador del grupo (no se puede quitar) */
+            isOwner: boolean;
+        };
+        UpdateMemberDto: {
+            role: components["schemas"]["MembershipRole"];
         };
         /** @enum {string} */
         BlockType: "AMRAP" | "EMOM" | "FOR_TIME" | "STRENGTH" | "FREE";
@@ -340,6 +391,7 @@ export interface components {
             title: string | null;
             content: string;
             movement: string | null;
+            videoUrl: string | null;
             sets: components["schemas"]["SetPrescriptionDto"][] | null;
             scoreType: components["schemas"]["ScoreType"] | null;
         };
@@ -348,7 +400,7 @@ export interface components {
             groupId: string;
             /** @example 2026-11-02 */
             date: string;
-            title: string;
+            title: string | null;
             createdById: string;
             /** Format: date-time */
             createdAt: string;
@@ -369,6 +421,11 @@ export interface components {
              *     Pull-ups
              */
             content?: string;
+            /**
+             * @description Link de YouTube (watch, youtu.be, shorts, embed o live)
+             * @example https://www.youtube.com/watch?v=dQw4w9WgXcQ
+             */
+            videoUrl?: string;
             /** @example Snatch */
             movement?: string;
             sets?: components["schemas"]["SetPrescriptionDto"][];
@@ -381,8 +438,11 @@ export interface components {
              * @example 2026-11-02
              */
             date: string;
-            /** @example Lunes pesado */
-            title: string;
+            /**
+             * @description Opcional
+             * @example Murph
+             */
+            title?: string;
             /** @description El orden del array define Block.order */
             blocks: components["schemas"]["BlockInputDto"][];
         };
@@ -392,8 +452,11 @@ export interface components {
              * @example 2026-11-02
              */
             date: string;
-            /** @example Lunes pesado */
-            title: string;
+            /**
+             * @description Opcional
+             * @example Murph
+             */
+            title?: string;
             /** @description El orden del array define Block.order */
             blocks: components["schemas"]["BlockInputDto"][];
         };
@@ -666,7 +729,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInviteDto"];
+            };
+        };
         responses: {
             201: {
                 headers: {
@@ -674,6 +741,117 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InviteDto"];
+                };
+            };
+            /** @description Sin membresía o rol insuficiente */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recurso inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GroupsController_members: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberDto"][];
+                };
+            };
+            /** @description Sin membresía o rol insuficiente */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recurso inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GroupsController_removeMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberDto"][];
+                };
+            };
+            /** @description Sin membresía o rol insuficiente */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recurso inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    GroupsController_updateMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMemberDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberDto"][];
                 };
             };
             /** @description Sin membresía o rol insuficiente */

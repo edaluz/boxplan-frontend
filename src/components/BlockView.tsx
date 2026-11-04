@@ -1,6 +1,7 @@
 import type { Block } from '../api/client'
 import { SCORE_LABEL } from '../lib/scores'
 import SetsCalculator from './SetsCalculator'
+import YouTubeEmbed from './YouTubeEmbed'
 
 const TYPE_LABEL: Record<Block['type'], string> = {
   AMRAP: 'AMRAP', EMOM: 'EMOM', FOR_TIME: 'For time', STRENGTH: 'Fuerza / LPO', FREE: 'Libre',
@@ -19,6 +20,7 @@ export default function BlockView({ block, children, calculator }: { block: Bloc
         ? <SetsCalculator block={block} />
         : <p className="mt-1 font-mono text-sm text-lime-200">{formatSets(block.sets)}</p>)}
       {block.content && <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-300">{block.content}</p>}
+      {block.videoUrl && <YouTubeEmbed url={block.videoUrl} />}
       {children}
     </div>
   )

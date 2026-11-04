@@ -46,7 +46,7 @@ export default function CoachWeek({ groupId }: { groupId: string }) {
               {workouts.map((w) => (
                 <div key={w.id} className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="font-semibold text-lime-300">{w.title}</p>
+                    <p className="font-semibold text-lime-300">{w.title || <span className="font-normal text-zinc-500">Planificación</span>}</p>
                     <button className="btn-ghost px-2 py-1 text-xs" onClick={() => setEditing({ date: d, workout: w })}>Editar</button>
                   </div>
                   {w.blocks.map((b) => (

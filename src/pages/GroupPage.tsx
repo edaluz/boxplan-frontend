@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { api, unwrap } from '../api/client'
 import ErrorText from '../components/ErrorText'
+import MembersPanel from '../components/MembersPanel'
 import AthleteDay from './AthleteDay'
 import CoachWeek from './CoachWeek'
 import { RoleBadge, useMyGroups } from './GroupsPage'
@@ -11,6 +12,7 @@ export default function GroupPage() {
   const { groupId = '' } = useParams()
   const groups = useMyGroups()
   const group = groups.data?.find((g) => g.id === groupId)
+  const [showMembers, setShowMembers] = useState(false)
 
   if (groups.isLoading) return <p className="text-zinc-400">Cargando…</p>
   if (!group) return <p>Grupo no encontrado. <Link className="underline" to="/">Volver</Link></p>
@@ -21,8 +23,16 @@ export default function GroupPage() {
         <Link to="/" className="text-zinc-400 hover:text-zinc-200">←</Link>
         <h2 className="text-xl font-bold">{group.name}</h2>
         <RoleBadge role={group.role} />
-        {group.role === 'COACH' && <InviteButton groupId={groupId} groupName={group.name} />}
+        {group.role === 'COACH' && (
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <button className={showMembers ? 'btn-primary' : 'btn-ghost'} onClick={() => setShowMembers(!showMembers)}>
+              Miembros
+            </button>
+            <InviteButton groupId={groupId} groupName={group.name} />
+          </div>
+        )}
       </div>
+      {group.role === 'COACH' && showMembers && <MembersPanel groupId={groupId} />}
       {group.role === 'COACH' ? <CoachWeek groupId={groupId} /> : <AthleteDay groupId={groupId} />}
     </div>
   )
@@ -30,14 +40,22 @@ export default function GroupPage() {
 
 function InviteButton({ groupId, groupName }: { groupId: string; groupName: string }) {
   const m = useMutation({
-    mutationFn: () => unwrap(api.POST('/groups/{id}/invites', { params: { path: { id: groupId } } })),
+    mutationFn: (role: 'ATHLETE' | 'COACH') =>
+      unwrap(api.POST('/groups/{id}/invites', { params: { path: { id: groupId } }, body: { role } })),
   })
   return (
-    <div className="ml-auto flex items-center gap-2">
+    <div className="flex items-center gap-2">
       {m.data ? (
-        <InviteChip code={m.data.code} groupName={groupName} expiresAt={m.data.expiresAt} />
+        <>
+          <span className="text-xs text-zinc-400">{m.data.role === 'COACH' ? 'Link de coach:' : 'Link de alumno:'}</span>
+          <InviteChip code={m.data.code} groupName={groupName} expiresAt={m.data.expiresAt} asCoach={m.data.role === 'COACH'} />
+          <button className="px-1 text-zinc-500 hover:text-zinc-200" title="Generar otro" onClick={() => m.reset()}>✕</button>
+        </>
       ) : (
-        <button className="btn-ghost" onClick={() => m.mutate()} disabled={m.isPending}>Invitar alumnos</button>
+        <>
+          <button className="btn-ghost" onClick={() => m.mutate('ATHLETE')} disabled={m.isPending}>Invitar alumnos</button>
+          <button className="btn-ghost" onClick={() => m.mutate('COACH')} disabled={m.isPending}>Invitar coach</button>
+        </>
       )}
       <ErrorText error={m.error} />
     </div>
@@ -45,10 +63,12 @@ function InviteButton({ groupId, groupName }: { groupId: string; groupName: stri
 }
 
 /** Código como botón: en celular abre "Compartir"; en desktop copia el link. */
-function InviteChip({ code, groupName, expiresAt }: { code: string; groupName: string; expiresAt: string }) {
+function InviteChip({ code, groupName, expiresAt, asCoach }: { code: string; groupName: string; expiresAt: string; asCoach: boolean }) {
   const [copied, setCopied] = useState(false)
   const link = `${window.location.origin}/join/${code}`
-  const text = `Sumate a ${groupName} en Boxplan: ${link}`
+  const text = asCoach
+    ? `Sumate como coach de ${groupName} en Boxplan: ${link}`
+    : `Sumate a ${groupName} en Boxplan: ${link}`
   const isTouch = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
 
   const onClick = async () => {

@@ -57,7 +57,7 @@ export default function JoinPage() {
           </div>
         </div>
       )}
-      <p className="text-sm text-zinc-400">Te vas a unir como alumno con esta cuenta.</p>
+      <p className="text-sm text-zinc-400">Te vas a unir al grupo con esta cuenta.</p>
       <button className="btn-primary w-full" onClick={() => join.mutate()} disabled={join.isPending || !me.data}>
         {join.isPending ? 'Uniéndote…' : 'Unirme'}
       </button>
