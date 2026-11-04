@@ -364,7 +364,7 @@ export interface components {
             role: components["schemas"]["MembershipRole"];
         };
         /** @enum {string} */
-        BlockType: "AMRAP" | "EMOM" | "FOR_TIME" | "STRENGTH" | "FREE";
+        BlockType: "AMRAP" | "EMOM" | "FOR_TIME" | "STRENGTH" | "FREE" | "VIDEO";
         SetPrescriptionDto: {
             /**
              * @description Cantidad de series
@@ -392,6 +392,8 @@ export interface components {
             content: string;
             movement: string | null;
             videoUrl: string | null;
+            durationSec: number | null;
+            intervalSec: number | null;
             sets: components["schemas"]["SetPrescriptionDto"][] | null;
             scoreType: components["schemas"]["ScoreType"] | null;
         };
@@ -431,6 +433,16 @@ export interface components {
             sets?: components["schemas"]["SetPrescriptionDto"][];
             /** @description null u omitido = el bloque no admite scores */
             scoreType?: components["schemas"]["ScoreType"] | null;
+            /**
+             * @description Segundos. Requerido en AMRAP (duración), FOR_TIME (límite) y EMOM (duración total)
+             * @example 720
+             */
+            durationSec?: number;
+            /**
+             * @description Segundos. Requerido en EMOM (cada cuánto)
+             * @example 60
+             */
+            intervalSec?: number;
         };
         CreateWorkoutDto: {
             /**

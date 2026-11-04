@@ -6,7 +6,7 @@ import { kgTo, roundLoad, toKg, useUnit } from '../lib/units'
 import ErrorText from './ErrorText'
 import { rankingKey } from './Ranking'
 
-export default function ScoreForm({ blockId, scoreType }: { blockId: string; scoreType: ScoreType }) {
+export default function ScoreForm({ blockId, scoreType, onSaved }: { blockId: string; scoreType: ScoreType; onSaved?: () => void }) {
   const qc = useQueryClient()
   const me = currentUserId()
   const unit = useUnit()
@@ -38,7 +38,10 @@ export default function ScoreForm({ blockId, scoreType }: { blockId: string; sco
         params: { path: { id: blockId } },
         body: { numericValue, division, description: description || undefined },
       })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: rankingKey(blockId) }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: rankingKey(blockId) })
+      onSaved?.()
+    },
   })
 
   const submit = (e: React.FormEvent) => {

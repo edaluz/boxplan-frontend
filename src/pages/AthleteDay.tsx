@@ -1,9 +1,7 @@
 import { useState } from 'react'
-import { currentUserId } from '../api/client'
 import BlockView from '../components/BlockView'
 import ErrorText from '../components/ErrorText'
-import Ranking from '../components/Ranking'
-import ScoreForm from '../components/ScoreForm'
+import BlockScores from '../components/BlockScores'
 import { addDays, formatDay, startOfWeek, today } from '../lib/dates'
 import { useWorkouts } from '../lib/useWorkouts'
 
@@ -41,7 +39,6 @@ export default function AthleteDay({ groupId }: { groupId: string }) {
 
 function DayView({ groupId, day, setDay }: { groupId: string; day: string; setDay: (d: string) => void }) {
   const q = useWorkouts(groupId, day, day)
-  const me = currentUserId()
 
   return (
     <>
@@ -63,15 +60,7 @@ function DayView({ groupId, day, setDay }: { groupId: string; day: string; setDa
           {w.title && <h3 className="text-lg font-bold">{w.title}</h3>}
           {w.blocks.map((b) => (
             <BlockView key={b.id} block={b} calculator>
-              {b.scoreType && (
-                <>
-                  <ScoreForm blockId={b.id} scoreType={b.scoreType} />
-                  <div className="mt-3">
-                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">Ranking</p>
-                    <Ranking blockId={b.id} highlightUserId={me} />
-                  </div>
-                </>
-              )}
+              {b.scoreType && <BlockScores blockId={b.id} scoreType={b.scoreType} />}
             </BlockView>
           ))}
         </article>

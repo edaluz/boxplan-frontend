@@ -12,6 +12,7 @@ import Avatar from './components/Avatar'
 import { postLoginPath } from './lib/pendingJoin'
 import { useMe } from './lib/useMe'
 import ProfilePage from './pages/ProfilePage'
+import TimersPage from './timers/TimersPage'
 
 export default function App() {
   const [authed, setAuthed] = useState(() => !!tokens.access)
@@ -49,6 +50,7 @@ export default function App() {
           BOX<span className="text-lime-400">PLAN</span>
         </a>
         <div className="flex gap-2">
+          <Link to="/timers" className="btn-ghost" title="Timers">⏱<span className="ml-1.5">Timers</span></Link>
           <ProfileLink />
           <button className="btn-ghost" onClick={logout}>Salir</button>
         </div>
@@ -57,6 +59,7 @@ export default function App() {
         <Route path="/" element={<GroupsPage />} />
         <Route path="/g/:groupId" element={<GroupPage />} />
         <Route path="/perfil" element={<ProfilePage />} />
+        <Route path="/timers" element={<TimersPage />} />
         <Route path="/join/:code" element={<JoinPage />} />
         <Route path="/ajustes" element={<Navigate to="/perfil" replace />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />

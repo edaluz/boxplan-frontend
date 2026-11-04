@@ -7,10 +7,14 @@ import { formatDay } from '../lib/dates'
 import { youtubeId } from '../lib/youtube'
 import { SCORE_LABEL } from '../lib/scores'
 import { workoutsKey } from '../lib/useWorkouts'
+import { BLOCK_TYPE_LABEL, EMOM_EVERY, MINUTES } from '../lib/blockTypes'
+import { fmtDuration } from '../timers/plan'
 import ErrorText from './ErrorText'
 import YouTubeEmbed from './YouTubeEmbed'
 
-const BLOCK_TYPES = ['FREE', 'STRENGTH', 'AMRAP', 'EMOM', 'FOR_TIME'] as const
+const BLOCK_TYPES = ['FREE', 'STRENGTH', 'AMRAP', 'FOR_TIME', 'EMOM', 'VIDEO'] as const
+const TIMED = ['AMRAP', 'FOR_TIME', 'EMOM'] as const
+const isTimed = (t: string) => (TIMED as readonly string[]).includes(t)
 const SCORE_TYPES = ['TIME', 'REPS', 'ROUNDS_REPS', 'LOAD', 'TEXT'] as const
 
 const schema = z.object({
@@ -22,16 +26,27 @@ const schema = z.object({
     title: z.string().optional(),
     content: z.string(),
     movement: z.string(),
-    videoUrl: z.string().refine((v) => !v.trim() || !!youtubeId(v), 'Pegá un link de YouTube'),
+    videoUrl: z.string(),
+    durationMin: z.string(),
+    intervalSec: z.string(),
     sets: z.array(z.object({ sets: z.string(), reps: z.string(), percent: z.string() })),
     scoreType: z.enum(SCORE_TYPES).or(z.literal('')),
-  }).refine((b) => b.content.trim() || b.sets.some((s) => s.reps.trim()), {
-    message: 'Escribí el contenido o cargá series', path: ['content'],
+  }).superRefine((b, ctx) => {
+    const err = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message })
+    if (b.type === 'VIDEO') {
+      if (!youtubeId(b.videoUrl)) err('videoUrl', 'Pegá un link de YouTube')
+      return
+    }
+    if (!b.content.trim() && !b.sets.some((s) => s.reps.trim())) err('content', 'Escribí el contenido o cargá series')
+    if (isTimed(b.type) && !b.durationMin) err('durationMin', 'Elegí el tiempo')
+    if (b.type === 'EMOM' && !b.intervalSec) err('intervalSec', 'Elegí cada cuánto')
   })),
 })
 type Form = z.infer<typeof schema>
 
-const emptyBlock = (): Form['blocks'][number] => ({ type: 'FREE', title: '', content: '', movement: '', videoUrl: '', sets: [], scoreType: '' })
+const emptyBlock = (n: number): Form['blocks'][number] => ({
+  type: 'FREE', title: `Bloque ${n}`, content: '', movement: '', videoUrl: '', durationMin: '', intervalSec: '', sets: [], scoreType: '',
+})
 const emptySet = () => ({ sets: '1', reps: '', percent: '' })
 
 const MOVEMENTS = [
@@ -55,13 +70,16 @@ export default function WorkoutEditor({ groupId, date, workout, onClose }: {
           title: workout.title ?? '',
           blocks: workout.blocks.map((b) => ({
             id: b.id, type: b.type, title: b.title ?? '', content: b.content, movement: b.movement ?? '', videoUrl: b.videoUrl ?? '',
+            durationMin: b.durationSec ? String(Math.round(b.durationSec / 60)) : '',
+            intervalSec: b.intervalSec ? String(b.intervalSec) : '',
             sets: (b.sets ?? []).map((s) => ({ sets: String(s.sets), reps: s.reps, percent: s.percent?.toString() ?? '' })),
             scoreType: b.scoreType ?? '',
           })),
         }
-      : { date, title: '', blocks: [{ ...emptyBlock(), title: 'Warm-up' }, { ...emptyBlock(), type: 'FOR_TIME', title: 'WOD', scoreType: 'TIME' }] },
+      : { date, title: '', blocks: [emptyBlock(1)] },
   })
   const blocks = useFieldArray({ control, name: 'blocks' })
+  const watched = useWatch({ control, name: 'blocks' })
 
   const save = useMutation({
     mutationFn: (f: Form) => {
@@ -82,7 +100,9 @@ export default function WorkoutEditor({ groupId, date, workout, onClose }: {
               }))
             : undefined,
           videoUrl: b.videoUrl.trim() || undefined,
-          scoreType: b.scoreType || undefined,
+          durationSec: isTimed(b.type) && b.durationMin ? Number(b.durationMin) * 60 : undefined,
+          intervalSec: b.type === 'EMOM' && b.intervalSec ? Number(b.intervalSec) : undefined,
+          scoreType: b.type === 'VIDEO' ? undefined : b.scoreType || undefined,
         })),
       }
       return workout
@@ -116,44 +136,85 @@ export default function WorkoutEditor({ groupId, date, workout, onClose }: {
         </div>
 
         <div className="space-y-3">
-          {blocks.fields.map((field, i) => (
+          {blocks.fields.map((field, i) => {
+            const type = watched?.[i]?.type ?? field.type
+            const errs = formState.errors.blocks?.[i]
+            return (
             <div key={field.id} className="space-y-2 rounded-md border border-zinc-800 p-3">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <div className="col-span-2 sm:col-span-2">
-                  <label>Bloque {i + 1}</label>
-                  <input {...register(`blocks.${i}.title`)} placeholder="Warm-up, Strength, WOD…" />
+                  <label>Título</label>
+                  <input {...register(`blocks.${i}.title`)} placeholder={`Bloque ${i + 1}`} />
                 </div>
-                <div>
+                <div className={type === 'VIDEO' ? 'col-span-2' : ''}>
                   <label>Tipo</label>
                   <select {...register(`blocks.${i}.type`)}>
-                    {BLOCK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                    {BLOCK_TYPES.map((t) => <option key={t} value={t}>{BLOCK_TYPE_LABEL[t]}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label>Score</label>
-                  <select {...register(`blocks.${i}.scoreType`)}>
-                    <option value="">Sin score</option>
-                    {SCORE_TYPES.map((t) => <option key={t} value={t}>{SCORE_LABEL[t]}</option>)}
-                  </select>
+                {type !== 'VIDEO' && (
+                  <div>
+                    <label>Score</label>
+                    <select {...register(`blocks.${i}.scoreType`)}>
+                      <option value="">Sin score</option>
+                      {SCORE_TYPES.map((t) => <option key={t} value={t}>{SCORE_LABEL[t]}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {isTimed(type) && (
+                <div className="grid grid-cols-2 gap-2">
+                  {type === 'EMOM' && (
+                    <div>
+                      <label>Cada</label>
+                      <select {...register(`blocks.${i}.intervalSec`)}>
+                        <option value="">Elegir…</option>
+                        {EMOM_EVERY.map((s) => <option key={s} value={s}>{s < 60 ? `${s} seg` : `${fmtDuration(s)} min`}</option>)}
+                      </select>
+                      <ErrorText error={errs?.intervalSec?.message} />
+                    </div>
+                  )}
+                  <div>
+                    <label>{type === 'AMRAP' ? 'Duración' : type === 'FOR_TIME' ? 'Time cap' : 'Durante'}</label>
+                    <select {...register(`blocks.${i}.durationMin`)}>
+                      <option value="">Elegir…</option>
+                      {MINUTES.map((m) => <option key={m} value={m}>{m} min</option>)}
+                    </select>
+                    <ErrorText error={errs?.durationMin?.message} />
+                  </div>
                 </div>
-              </div>
-              <StrengthFields control={control} register={register} index={i} />
-              <textarea rows={3} {...register(`blocks.${i}.content`)} placeholder={'21-15-9\nThrusters 43/30kg\nPull-ups'} />
-              <ErrorText error={formState.errors.blocks?.[i]?.content?.message} />
-              <div>
-                <label>Video de YouTube (opcional)</label>
-                <input inputMode="url" placeholder="https://youtu.be/…" {...register(`blocks.${i}.videoUrl`)} />
-                <ErrorText error={formState.errors.blocks?.[i]?.videoUrl?.message} />
-                <VideoPreview control={control} index={i} />
-              </div>
+              )}
+
+              {type === 'VIDEO' ? (
+                <div className="space-y-2">
+                  <div>
+                    <label>Link de YouTube</label>
+                    <input inputMode="url" placeholder="https://youtu.be/…" {...register(`blocks.${i}.videoUrl`)} />
+                    <ErrorText error={errs?.videoUrl?.message} />
+                    <VideoPreview control={control} index={i} />
+                  </div>
+                  <textarea rows={2} {...register(`blocks.${i}.content`)} placeholder="Descripción (opcional)" />
+                </div>
+              ) : (
+                <>
+                  <StrengthFields control={control} register={register} index={i} />
+                  <textarea rows={3} {...register(`blocks.${i}.content`)} placeholder={'21-15-9\nThrusters 43/30kg\nPull-ups'} />
+                  <ErrorText error={errs?.content?.message} />
+                </>
+              )}
               <div className="flex gap-2 text-xs">
                 <button type="button" className="btn-ghost px-2 py-1" disabled={i === 0} onClick={() => blocks.move(i, i - 1)}>↑</button>
                 <button type="button" className="btn-ghost px-2 py-1" disabled={i === blocks.fields.length - 1} onClick={() => blocks.move(i, i + 1)}>↓</button>
                 <button type="button" className="btn-danger ml-auto px-2 py-1" onClick={() => blocks.remove(i)}>Quitar</button>
               </div>
             </div>
-          ))}
-          <button type="button" className="btn-ghost w-full" onClick={() => blocks.append(emptyBlock())}>+ Agregar bloque</button>
+            )
+          })}
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" className="btn-ghost" onClick={() => blocks.append(emptyBlock(blocks.fields.length + 1))}>+ Agregar bloque</button>
+            <button type="button" className="btn-ghost" onClick={() => blocks.append({ ...emptyBlock(blocks.fields.length + 1), type: 'VIDEO' })}>▶ Agregar video</button>
+          </div>
         </div>
 
         <ErrorText error={save.error ?? remove.error} />
